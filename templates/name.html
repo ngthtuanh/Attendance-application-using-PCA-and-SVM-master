@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+{% block bodyblock %}
+
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <h3 class="display-8 mb-4">Face Recognition Attendance System</h3>
+            
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h5 class="card-title mb-0">Live Camera Feed</h5>
+                                <button id="camera-control" class="btn btn-primary" onclick="startCamera()">
+                                    Start Camera
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div id="camera-container">
+                                <img id="camera-feed" src="" width="100%" style="display: none;">
+                                <div id="camera-placeholder" class="text-center p-5">
+                                    <h5>Camera is stopped</h5>
+                                    <p>Click "Start Camera" to begin attendance</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Attendance Status</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="attendance-alert" class="alert alert-success d-none">
+                                <span id="attendance-message"></span>
+                            </div>
+                            <div class="attendance-list">
+                                <ul id="attendance-records" class="list-group">
+                                    <!-- Attendance records will appear here -->
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Socket.IO client -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<script>
+const socket = io();
+let cameraActive = false;
+
+function startCamera() {
+    const cameraFeed = document.getElementById('camera-feed');
+    const cameraPlaceholder = document.getElementById('camera-placeholder');
+    const cameraControl = document.getElementById('camera-control');
+    
+    socket.emit('start_camera');
+    cameraFeed.src = "{{ url_for('video_feed') }}";
+    cameraFeed.style.display = 'block';
+    cameraPlaceholder.style.display = 'none';
+    cameraControl.textContent = 'Stop Camera';
+    cameraControl.onclick = stopCamera;
+    cameraActive = true;
+}
+
+function stopCamera() {
+    const cameraFeed = document.getElementById('camera-feed');
+    const cameraPlaceholder = document.getElementById('camera-placeholder');
+    const cameraControl = document.getElementById('camera-control');
+    
+    socket.emit('stop_camera');
+    cameraFeed.src = '';
+    cameraFeed.style.display = 'none';
+    cameraPlaceholder.style.display = 'block';
+    cameraControl.textContent = 'Start Camera';
+    cameraControl.onclick = startCamera;
+    cameraActive = false;
+}
+
+// Listen for attendance updates
+socket.on('attendance_update', function(data) {
+    // Show attendance alert
+    showAttendanceAlert(data.name);
+    
+    // Add to attendance list
+    addAttendanceRecord(data);
+    
+    // If stop_camera is true, stop the camera
+    if (data.stop_camera && cameraActive) {
+        stopCamera();
+    }
+});
+
+// Function to show attendance alert
+function showAttendanceAlert(name) {
+    const alertDiv = document.getElementById('attendance-alert');
+    const messageSpan = document.getElementById('attendance-message');
+    
+    messageSpan.textContent = `${name} đã điểm danh thành công!`;
+    alertDiv.classList.remove('d-none');
+    
+    // Hide the alert after 3 seconds
+    setTimeout(() => {
+        alertDiv.classList.add('d-none');
+    }, 3000);
+}
+
+// Function to add attendance record to list
+function addAttendanceRecord(data) {
+    const records = document.getElementById('attendance-records');
+    const li = document.createElement('li');
+    li.className = 'list-group-item';
+    li.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+            <span>${data.name}</span>
+            <small class="text-muted">${data.timestamp}</small>
+        </div>
+        <div class="small text-muted">Độ chính xác: ${data.score.toFixed(1)}%</div>
+    `;
+    
+    // Add to top of list
+    records.insertBefore(li, records.firstChild);
+    
+    // Keep only last 10 records
+    while (records.children.length > 10) {
+        records.removeChild(records.lastChild);
+    }
+}
+</script>
+
+{% endblock %}
